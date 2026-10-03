@@ -168,7 +168,9 @@ These numbers are my choices, not measurements.
 ### 2.10 Behaviour of `/osa`
 - `city` must be exactly `Mumbai`, `Delhi` or `Bengaluru`. Anything else, including `mumbai`, returns 400 with the valid values listed.
 - `date` must be `YYYY-MM-DD`, otherwise 400. If it is missing, it is yesterday in IST.
-- A day with no data returns HTTP 200 with `status: "no_data"`, `osa_pct: null`, `observations: 0`, `skus: []` and `coverage`. Statuses are `ok`, `partial` (something was excluded or incomplete) and `no_data`. A real 0% shows `0.00` with observations above 0.
+- A day with no data returns HTTP 200 with `status: "no_data"`, `osa_pct: null`, `observations: 0`, `skus: []` and `coverage`. Statuses are `ok`, `partial` (a store that qualifies is missing or incomplete in some sweep) and `no_data`. Stores left out by the active-and-serviceable rule do not make a report `partial`: the inactive ones are always excluded, so every report would be `partial` and the word would mean nothing. They are still listed under `coverage.excluded`. A real 0% shows `0.0` with observations above 0.
+- `coverage` holds `stores_expected` (stores that qualified in at least one sweep of the day), `stores_complete` (complete in every sweep where they qualified), `incomplete` and `excluded` (store, sweep, reason code and reason), `no_products` (complete stores with zero items) and `sweeps` (stores counted and rows counted in each sweep of the day).
+- `/osa` reads only the stored sweeps and never calls the portal. Fetching live on each request would take minutes (a sweep is 45 to 70 seconds), could trigger the soft-ban, could give a different answer on the next call, and would use today's flags for past days.
 - Percentages are rounded to 2 decimals, half up, using exact arithmetic. `skus` are sorted by `sku_id`.
 - `coverage` lists the sweeps that were used. A sweep that was never run is not in the database, so I make no claim about missing sweeps.
 - Stack: Python 3.10, Flask, `requests`, `pytest`, SQLite.
