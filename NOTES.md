@@ -102,6 +102,7 @@ Known limitations:
 - **Limit:** after a few failed recoveries for one store, mark it incomplete with the reason `soft_banned` so the sweep always finishes.
 - **Prevent:** pace requests (target about 2 per second), honour `Retry-After`, and count every attempt, including 429s and 503s, because they all count towards the ban (probe: 8 successes plus 22 429s were followed by the ban at the 31st attempt).
 - **Cost:** one ban adds roughly 25 seconds to a sweep of about 30 seconds. This is an estimate, not something I measured.
+- **When to stop the whole sweep:** a store that stays banned after its 3 rechecks can cost up to 155 seconds of waiting (25 + 65 + 65), and the next store would start the same cycle. If a ban never cleared, 26 stores could take over an hour. So the sweep stops after 3 stores in a row end as `soft_banned`. Any store that ends another way (complete, `partial`, and so on) resets the count, because an `origin` reply means the ban is over. The stores not yet fetched stay `pending` with the reason `not_attempted`, the summary says how many were not fetched, the exit code is non-zero, and running the same command later fetches the rest. Worst case before stopping: about 8 minutes. This was chosen over stopping after 2 to give a temporary ban more chances to clear.
 
 ### 2.5 When a store's sweep is complete
 A store-sweep is complete only if all of these hold:
@@ -155,6 +156,7 @@ These numbers are my choices, not measurements.
 - `--as-of` must have a timezone. It is normalised to UTC, so `...04:30:00Z` and `...10:00:00+05:30` are the same sweep.
 - The portal returns believable data for any timestamp, so a mistyped `--as-of` would produce fake data. `sweep.py` accepts any timezone-aware time but prints a warning if it is not one of the six sweep times.
 - If no store completes in a sweep, the summary is still printed with the reasons and the exit code is non-zero.
+- `started_at` and `finished_at` in `sweeps` describe the latest run that fetched something. A run with nothing to fetch (everything already complete) leaves both as they were, so a re-run cannot make a sweep look like it took minutes. A run that is stopped halfway leaves `finished_at` empty.
 
 ### 2.9 How rows are stored
 - All times are stored as UTC text. Each sweep also stores its IST date.
