@@ -195,6 +195,34 @@ def test_store_incomplete_in_one_sweep_is_not_counted_as_complete_for_the_day(co
     assert report["observations"] == 1
 
 
+def test_response_has_the_shape_the_readme_asks_for(conn, monkeypatch):
+    add_store_sweep(conn, "MUM-001", [("SKU-2", "Bread", 1, 5), ("SKU-1", "Milk", 0, 0)])
+    add_store_sweep(conn, "MUM-002", status="incomplete", reason_code="partial", reason_text="portal said partial")
+    add_store_sweep(conn, "MUM-003", serviceable=0)
+    monkeypatch.setattr(osa_app.db, "connect", lambda: conn)
+    response = osa_app.app.test_client().get("/osa?city=Mumbai&date=2026-09-28")
+
+    assert response.status_code == 200
+    assert response.content_type == "application/json"
+    body = response.get_json()
+    assert {"city", "date", "osa_pct", "observations", "coverage", "skus"} <= set(body)
+    assert {"stores_expected", "stores_complete", "incomplete"} <= set(body["coverage"])
+    assert isinstance(body["osa_pct"], float) and isinstance(body["observations"], int)
+    assert body["osa_pct"] == round(body["osa_pct"], 2)
+
+    for entry in body["coverage"]["incomplete"] + body["coverage"]["excluded"]:
+        assert {"store_id", "sweep", "reason"} <= set(entry)
+    for sku in body["skus"]:
+        assert set(sku) == {"sku_id", "name", "observations", "in_stock", "osa_pct"}
+    assert [s["sku_id"] for s in body["skus"]] == ["SKU-1", "SKU-2"]
+
+    # the parts add up to the whole
+    assert sum(s["observations"] for s in body["skus"]) == body["observations"] == 2
+    assert sum(s["in_stock"] for s in body["skus"]) == body["in_stock"] == 1
+    assert sum(w["observations"] for w in body["coverage"]["sweeps"]) == body["observations"]
+    assert sum(w["stores_counted"] for w in body["coverage"]["sweeps"]) == 1
+
+
 def test_osa_route_returns_the_report_as_json(conn, monkeypatch):
     add_store_sweep(conn, "MUM-001", [("SKU-1", "Milk", 1, 5), ("SKU-2", "Bread", 0, 0)])
     monkeypatch.setattr(osa_app.db, "connect", lambda: conn)
