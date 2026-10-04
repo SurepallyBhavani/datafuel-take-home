@@ -19,6 +19,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 TIMEOUT = 5          # seconds; the slow replies take 8
 MAX_ATTEMPTS = 6     # per request
 GAP = 0.5            # seconds between requests, about 2 per second
+MAX_RETRY_AFTER = 60 # never wait longer than this because of one Retry-After header
 MAX_PAGES = 50       # safety limit so a broken cursor cannot loop forever
 BAN_WAITS = [25, 65, 65]   # seconds to wait after each soft-ban; also the number of recoveries
 MAX_BANNED_IN_A_ROW = 3    # stop the sweep when this many stores in a row stay soft-banned
@@ -71,7 +72,7 @@ def get_json(path, params, counts):
                     pause = float(r.headers.get("Retry-After", 2))
                 except ValueError:
                     pause = 2
-                time.sleep(pause)
+                time.sleep(min(max(pause, 0), MAX_RETRY_AFTER))
                 continue
             elif r.status_code in (400, 401, 404):
                 return None, "HTTP %d: %s" % (r.status_code, r.text[:100])   # retrying cannot help
