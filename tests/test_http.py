@@ -86,6 +86,26 @@ def test_client_errors_are_not_retried(portal, status):
     assert error.startswith("HTTP %d" % status)
 
 
+def test_a_client_error_after_a_transient_failure_stops_at_the_client_error(portal):
+    body, error, attempts = call(portal, [FakeResponse(503), FakeResponse(400)])
+    assert body is None and attempts == 2
+    assert error.startswith("HTTP 400")
+    assert portal["replies"] == []                 # nothing was asked for after the 400
+
+
+def test_a_very_long_retry_after_is_capped(portal):
+    body, error, attempts = call(portal, [FakeResponse(429, headers={"Retry-After": "3600"}), FakeResponse(200, OK)])
+    assert body == OK
+    assert sweep.MAX_RETRY_AFTER in portal["sleeps"]
+    assert 3600 not in portal["sleeps"] and 3600.0 not in portal["sleeps"]
+
+
+def test_a_negative_retry_after_does_not_crash(portal):
+    body, error, attempts = call(portal, [FakeResponse(429, headers={"Retry-After": "-5"}), FakeResponse(200, OK)])
+    assert body == OK
+    assert min(portal["sleeps"]) >= 0
+
+
 def test_timeout_and_connection_errors_are_retried(portal):
     body, error, attempts = call(portal, [requests.Timeout(), requests.ConnectionError(), FakeResponse(200, OK)])
     assert body == OK and attempts == 3

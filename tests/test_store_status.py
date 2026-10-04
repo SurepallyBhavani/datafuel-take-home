@@ -70,6 +70,17 @@ def test_partial_store_is_incomplete_with_its_reason_and_saves_nothing(run_sweep
     assert conn.execute("SELECT COUNT(*) FROM observations WHERE store_id = 'MUM-001'").fetchone()[0] == 1
 
 
+def test_a_store_that_gives_up_does_not_stop_the_sweep_and_its_reason_is_saved(run_sweep):
+    outcomes = {"MUM-001": "ok", "MUM-002": "fetch_failed", "MUM-003": "ok"}
+    conn, exit_code = run_sweep(make_roster(3), lambda store_id: outcomes[store_id])
+    assert run_sweep.fetched == ["MUM-001", "MUM-002", "MUM-003"]       # the store after the failure was still tried
+    assert exit_code == 0
+    assert states(conn)["MUM-002"][:2] == ("incomplete", "fetch_failed")
+    assert states(conn)["MUM-001"][0] == states(conn)["MUM-003"][0] == "complete"
+    reason = conn.execute("SELECT reason_text FROM store_sweeps WHERE store_id = 'MUM-002'").fetchone()[0]
+    assert reason                                                       # a message is kept, not left empty
+
+
 def test_sweep_with_no_complete_store_exits_with_code_1(run_sweep):
     _, exit_code = run_sweep(make_roster(2), lambda store_id: "partial")
     assert exit_code == 1
