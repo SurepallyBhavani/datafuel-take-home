@@ -175,5 +175,40 @@ These numbers are my choices, not measurements.
 - `coverage` lists the sweeps that were used. A sweep that was never run is not in the database, so I make no claim about missing sweeps.
 - Stack: Python 3.10, Flask, `requests`, `pytest`, SQLite.
 
+### 2.11 Why "active and serviceable" and not "active only"
+Two rules could decide which stores count towards OSA:
+- **Rule A (used):** a store counts only if it is `is_active` **and** `is_serviceable`. 25 stores.
+- **Rule B (the alternative):** a store counts if it is `is_active`. 26 stores.
+
+Only one store separates them: DEL-006 (active, not serviceable). So only Delhi can differ.
+
+I compared them on the stored data (read-only queries on `osa.db` after the six sweeps, complete store-sweeps only, flags as read when each sweep was run):
+
+| City | IST day | Rule A | Rule B | B − A |
+|---|---|---|---|---|
+| Mumbai | 27, 28, 29 Sep | 88.84 / 86.06 / 88.05 | same | 0.00 |
+| Bengaluru | 27, 28, 29 Sep | 86.25 / 89.57 / 87.83 | same | 0.00 |
+| Delhi | 27 Sep | 80.30% (371 of 462) | 80.80% (425 of 526) | +0.50 pp |
+| Delhi | 28 Sep | 80.30% (534 of 665) | 79.63% (606 of 761) | −0.67 pp |
+| Delhi | 29 Sep | 82.68% (191 of 231) | 82.13% (216 of 263) | −0.55 pp |
+
+How big is that difference:
+- The Delhi difference is at most 0.67 percentage points. For comparison, the sampling error of the Delhi 28 Sep figure is about 1.5 points, and Delhi's three sweeps on that day differ from each other by 2.1 points (80.1, 81.4, 79.3). The choice of rule moves the city figure by less than ordinary noise.
+- DEL-006's own stock is 78.6% in stock (151 of 192 rows), against 80.7% for the other eight Delhi stores together. Among the nine stores the range is 78.0% to 82.9%, so its stock looks like any other store's. The data does not show that a not-serviceable store has different stock.
+- Per product (Delhi, 28 Sep), the largest change is −7.2 points (SKU-0013), and 1 of 36 products moves by more than 5 points. Per-product figures rest on about 18 rows each, so one store's rows move them more than they move the city figure.
+
+Why Rule A:
+- Stock in a store that is not accepting orders cannot be bought, so counting it as "in stock" overstates what a shopper can actually get. A not-serviceable store should not add to availability.
+- A store excluded this way is not scored as out of stock either. It is left out and listed in `coverage.excluded` with the reason `not_serviceable`, so the reader can see it.
+- Rule B is simpler, but the extra work for Rule A is small: the flags are saved with every sweep, and the rule is one condition in `/osa`, so it can be switched without fetching anything again. The data for DEL-006 is fetched and stored for that reason.
+
+Shortcomings of Rule A:
+- The flags are the values at the time each sweep was run, not at the time of the snapshot. For the 27 to 29 Sep sweeps, which I ran later, they are the values on the day I ran them. The roster has no `as_of`, so the earlier values cannot be recovered.
+- One flag value covers a whole sweep, but `is_serviceable` can change during a day.
+- Complete store-sweeps keep their saved flags, but a store that is retried later takes the flags of the later run. Two sweeps of the same day could then use different flags for the same store.
+- Delhi is measured on fewer stores than the other cities (8 qualifying, against 9 for Mumbai and 8 for Bengaluru), and on 28 Sep it has 665 rows against 761 under Rule B. City figures are therefore based on slightly different store sets.
+- The data does not show a difference in DEL-006's stock, so the rule rests on the principle above and not on a difference I could measure. With this data, either rule gives nearly the same city figure.
+- Individual product figures move more than the city figure, because each is based on few rows.
+
 ## 3. Short answers
 _To be filled in Step 11._
